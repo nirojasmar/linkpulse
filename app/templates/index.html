@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Linkpulse{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Recent Links</h2>
+        <span class="badge badge-green">Auto-refresh: 5s</span>
+    </div>
+
+    <div id="links-table-container"
+         hx-get="/"
+         hx-trigger="every 5s"
+         hx-select="#links-table-container"
+         hx-swap="outerHTML">
+        <table>
+            <thead>
+                <tr>
+                    <th>Short Code</th>
+                    <th>Target URL</th>
+                    <th>Created</th>
+                    <th>Total Clicks</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if links %}
+                    {% for item in links %}
+                    <tr>
+                        <td>
+                            <a href="/{{ item.code }}" class="link" target="_blank" style="font-weight: 600;">
+                                {{ item.code }}
+                            </a>
+                        </td>
+                        <td>
+                            <a href="{{ item.target_url }}" class="link truncate" target="_blank" title="{{ item.target_url }}">
+                                {{ item.target_url }}
+                            </a>
+                        </td>
+                        <td style="color: var(--text-muted); font-size: 0.8rem;">
+                            {{ item.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}
+                        </td>
+                        <td>
+                            <span class="badge">{{ item.click_count }}</span>
+                        </td>
+                        <td>
+                            <a href="/dashboard/{{ item.code }}" class="link" style="font-size: 0.85rem;">
+                                View Stats &rarr;
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                            No short links created yet. Create one via <code>POST /api/v1/links</code>.
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

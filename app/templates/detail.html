@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Stats for {{ stats.code }} — Linkpulse{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/" class="link">&larr; Back to all links</a>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Stats for <code>{{ stats.code }}</code></h2>
+        <a href="/{{ stats.code }}" target="_blank" class="badge">Visit Link &rarr;</a>
+    </div>
+
+    <div style="margin-bottom: 1.5rem; word-break: break-all;">
+        <span style="color: var(--text-muted); font-size: 0.85rem;">Target URL:</span><br/>
+        <a href="{{ stats.target_url }}" target="_blank" class="link">{{ stats.target_url }}</a>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-value">{{ stats.total_clicks }}</div>
+            <div class="stat-label">Total Clicks</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value">
+                {% set ns = namespace(count=0) %}
+                {% for d in stats.clicks_last_7_days %}
+                    {% set ns.count = ns.count + d.count %}
+                {% endfor %}
+                {{ ns.count }}
+            </div>
+            <div class="stat-label">Clicks (Last 7 Days)</div>
+        </div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem;">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Daily Clicks (Last 7 Days)</h3>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th style="text-align: right;">Clicks</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in stats.clicks_last_7_days %}
+                <tr>
+                    <td>{{ d.day }}</td>
+                    <td style="text-align: right; font-weight: 600;">{{ d.count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Top Referrers</h3>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Referrer</th>
+                    <th style="text-align: right;">Clicks</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if stats.top_referrers %}
+                    {% for ref in stats.top_referrers %}
+                    <tr>
+                        <td class="truncate" title="{{ ref.referrer }}">{{ ref.referrer }}</td>
+                        <td style="text-align: right; font-weight: 600;">{{ ref.count }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="2" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">
+                            No referrer data recorded yet.
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
