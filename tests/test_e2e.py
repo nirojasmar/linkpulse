@@ -1,8 +1,8 @@
 import asyncio
-
-from httpx import ASGITransport, AsyncClient
 import pytest
 import redis.asyncio as redis
+
+from httpx import ASGITransport, AsyncClient
 
 from app.config import get_settings
 from app.main import app
