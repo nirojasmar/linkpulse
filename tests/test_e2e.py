@@ -2,7 +2,6 @@ import asyncio
 
 import pytest
 import redis.asyncio as redis
-
 from httpx import ASGITransport, AsyncClient
 
 from app.config import get_settings
