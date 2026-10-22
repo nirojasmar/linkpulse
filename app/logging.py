@@ -18,8 +18,17 @@ class JSONFormatter(logging.Formatter):
             "pod": getattr(record, "pod", self.pod_name),
         }
 
-        # Add optional standard fields if present
-        for field in ("request_id", "path", "status", "duration_ms", "target", "error"):
+        # Add optional standard and extra fields if present
+        for field in (
+            "request_id",
+            "path",
+            "status",
+            "duration_ms",
+            "target",
+            "error",
+            "config",
+            "count",
+        ):
             val = getattr(record, field, None)
             if val is not None:
                 log_data[field] = val

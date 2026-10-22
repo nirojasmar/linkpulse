@@ -33,39 +33,45 @@ async def lifespan(app: FastAPI):
         extra={"config": settings.redacted_dict()},
     )
 
-    # Artificial startup delay if configured
-    if settings.startup_delay_seconds > 0:
-        logger.info(
-            f"Applying artificial startup delay of {settings.startup_delay_seconds} seconds"
-        )
-        await asyncio.sleep(settings.startup_delay_seconds)
-
-    # Startup dependency check
-    db_ok, db_err = await check_db_health(timeout=3.0)
-    redis_ok, redis_err = await check_redis_health(timeout=3.0)
-
-    if settings.fail_if_dependency_down_at_startup:
-        if not db_ok:
-            logger.fatal(
-                f"Startup failed: PostgreSQL at {settings.db_target} unreachable: {db_err}"
+    # Background startup sequence allows port to bind so /startupz responds with 503 during delay
+    async def _startup_sequence():
+        if settings.startup_delay_seconds > 0:
+            logger.info(
+                f"Applying artificial startup delay of {settings.startup_delay_seconds} seconds"
             )
-            raise SystemExit(1)
-        if not redis_ok:
-            logger.fatal(
-                f"Startup failed: Redis at {settings.redis_target} unreachable: {redis_err}"
-            )
-            raise SystemExit(1)
-    else:
-        if not db_ok:
-            logger.warning(f"PostgreSQL at {settings.db_target} not ready at startup: {db_err}")
-        if not redis_ok:
-            logger.warning(f"Redis at {settings.redis_target} not ready at startup: {redis_err}")
+            await asyncio.sleep(settings.startup_delay_seconds)
 
-    mark_startup_completed()
-    logger.info("Linkpulse API startup complete and ready to serve traffic.")
+        # Startup dependency check
+        db_ok, db_err = await check_db_health(timeout=3.0)
+        redis_ok, redis_err = await check_redis_health(timeout=3.0)
+
+        if settings.fail_if_dependency_down_at_startup:
+            if not db_ok:
+                logger.fatal(
+                    f"Startup failed: PostgreSQL at {settings.db_target} unreachable: {db_err}"
+                )
+                raise SystemExit(1)
+            if not redis_ok:
+                logger.fatal(
+                    f"Startup failed: Redis at {settings.redis_target} unreachable: {redis_err}"
+                )
+                raise SystemExit(1)
+        else:
+            if not db_ok:
+                logger.warning(f"PostgreSQL at {settings.db_target} not ready at startup: {db_err}")
+            if not redis_ok:
+                logger.warning(
+                    f"Redis at {settings.redis_target} not ready at startup: {redis_err}"
+                )
+
+        mark_startup_completed()
+        logger.info("Linkpulse API startup complete and ready to serve traffic.")
+
+    startup_task = asyncio.create_task(_startup_sequence())
 
     yield
 
+    startup_task.cancel()
     logger.info("Shutting down Linkpulse API...")
     await close_redis_client()
     engine = get_engine()

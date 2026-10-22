@@ -1,8 +1,12 @@
 """Unit tests for Linkpulse."""
 
+import json
+import logging
+
 import pytest
 
 from app.config import Settings
+from app.logging import JSONFormatter
 from app.schemas import LinkCreate
 from app.services.links import generate_code
 
@@ -51,3 +55,22 @@ def test_settings_secret_redaction():
     assert "***" in redacted["database_url"]
     assert settings.db_target == "postgres-host:5432"
     assert settings.redis_target == "redis-host:6379"
+
+
+def test_json_formatter_includes_config_and_count():
+    formatter = JSONFormatter(pod_name="test-pod")
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname="test.py",
+        lineno=1,
+        msg="test message",
+        args=(),
+        exc_info=None,
+    )
+    record.config = {"database_url": "redacted"}
+    record.count = 42
+    output = formatter.format(record)
+    data = json.loads(output)
+    assert data["config"] == {"database_url": "redacted"}
+    assert data["count"] == 42

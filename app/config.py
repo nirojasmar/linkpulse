@@ -1,3 +1,5 @@
+import datetime
+import json
 import sys
 from urllib.parse import urlparse
 
@@ -89,6 +91,10 @@ def get_settings() -> Settings:
         return Settings()  # type: ignore[call-arg]
     except Exception as e:
         # Required configuration missing; fail fast with clear output
-        err_json = f'{{"timestamp": "{None}", "level": "FATAL", "message": "Failed config: {e}"}}'
-        print(err_json, file=sys.stderr)
+        err_dict = {
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "level": "FATAL",
+            "message": f"Failed to load configuration: {e}",
+        }
+        print(json.dumps(err_dict), file=sys.stderr)
         raise SystemExit(1) from e

@@ -36,8 +36,7 @@ jobs:
 
       - name: Start services for testing
         run: |
-          docker compose up -d postgres redis migrate
-          sleep 5
+          docker compose up -d --wait postgres redis migrate
 
       - name: Run tests
         env:
@@ -97,3 +96,25 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  bump-gitops:
+    name: Bump GitOps Image Tag
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: nirojasmar/linkpulse-argo-gitops
+          token: ${{ secrets.GITOPS_PAT || secrets.GITHUB_TOKEN }}
+      - name: Set image tag in overlay
+        run: |
+          cd overlays/oci
+          kustomize edit set image ghcr.io/nirojasmar/linkpulse=ghcr.io/nirojasmar/linkpulse:git-${GITHUB_SHA::7}
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git commit -am "deploy: git-${GITHUB_SHA::7}"
+            git push
+          fi

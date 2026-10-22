@@ -1,4 +1,7 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -18,6 +21,7 @@ from app.services.links import (
     soft_delete_link,
 )
 
+logger = logging.getLogger("linkpulse")
 router = APIRouter(prefix="/api/v1/links", tags=["links"])
 
 
@@ -40,10 +44,17 @@ async def create_new_link(
             target_url=payload.url,
             custom_code=payload.custom_code,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except (ValueError, IntegrityError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Code conflict: {e}",
+        )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        logger.error(f"Unexpected error creating link: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create link",
+        )
 
     return LinkResponse(
         code=link.code,

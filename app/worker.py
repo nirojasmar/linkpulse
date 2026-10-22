@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 import redis.asyncio as redis
+from prometheus_client import start_http_server
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -99,7 +100,6 @@ async def process_batch(events: list[tuple[str, dict[str, Any]]], r: redis.Redis
             link_map = {row.code: row.id for row in result.all()}
 
             valid_clicks = []
-            daily_aggregates: dict[tuple[int, datetime.date], int] = {}
 
             for ev in parsed_events:
                 link_id = link_map.get(ev["code"])
@@ -117,30 +117,35 @@ async def process_batch(events: list[tuple[str, dict[str, Any]]], r: redis.Redis
                     }
                 )
 
-                day = ev["clicked_at"].date()
-                key = (link_id, day)
-                daily_aggregates[key] = daily_aggregates.get(key, 0) + 1
-
             if valid_clicks:
-                # Insert clicks, deduping on event_id
+                # Insert clicks, deduping on event_id and returning only inserted rows
                 click_stmt = (
                     insert(Click)
                     .values(valid_clicks)
                     .on_conflict_do_nothing(index_elements=["event_id"])
+                    .returning(Click.link_id, Click.clicked_at)
                 )
-                await session.execute(click_stmt)
+                res = await session.execute(click_stmt)
+                inserted_rows = res.all()
 
-            # Upsert daily click counts
-            for (link_id, day), count in daily_aggregates.items():
-                daily_stmt = (
-                    insert(DailyClickCount)
-                    .values(link_id=link_id, day=day, count=count)
-                    .on_conflict_do_update(
-                        index_elements=["link_id", "day"],
-                        set_={"count": DailyClickCount.count + count},
+                # Build daily_aggregates ONLY for actually inserted click events (dedup protection)
+                daily_aggregates: dict[tuple[int, datetime.date], int] = {}
+                for row in inserted_rows:
+                    day = row.clicked_at.date()
+                    key = (row.link_id, day)
+                    daily_aggregates[key] = daily_aggregates.get(key, 0) + 1
+
+                # Upsert daily click counts
+                for (link_id, day), count in daily_aggregates.items():
+                    daily_stmt = (
+                        insert(DailyClickCount)
+                        .values(link_id=link_id, day=day, count=count)
+                        .on_conflict_do_update(
+                            index_elements=["link_id", "day"],
+                            set_={"count": DailyClickCount.count + count},
+                        )
                     )
-                )
-                await session.execute(daily_stmt)
+                    await session.execute(daily_stmt)
 
     # Acknowledge messages in Redis after successful DB commit
     await r.xack(STREAM_NAME, GROUP_NAME, *event_ids)
@@ -172,6 +177,14 @@ async def run_worker() -> None:
         f"Starting Linkpulse Worker (version={settings.app_version}, pod={settings.pod_name})",
         extra={"config": settings.redacted_dict()},
     )
+
+    # Start Prometheus HTTP metrics server on port 9100 (H2)
+    metrics_port = 9100
+    try:
+        start_http_server(metrics_port)
+        logger.info(f"Worker Prometheus metrics server started on port {metrics_port}")
+    except Exception as exc:
+        logger.warning(f"Could not start metrics server on port {metrics_port}: {exc}")
 
     consumer_name = f"worker-{settings.pod_name}"
     r = redis.from_url(
