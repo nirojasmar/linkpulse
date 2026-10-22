@@ -102,6 +102,8 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Check out GitOps repository
         uses: actions/checkout@v4
